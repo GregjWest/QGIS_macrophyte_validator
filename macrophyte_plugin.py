@@ -56,7 +56,6 @@ class MacrophyteDataPlugin:
         self.actions.append(action)
 
         # Build dock
-        print(f"PLUGIN created dock_widget id={id(self.dock_widget)}") 
         self.dock_widget = MacrophyteDockWidget()
         self.dock = QgsDockWidget("Macrophyte Data Collection",
                                   self.iface.mainWindow())
@@ -196,16 +195,10 @@ class MacrophyteDataPlugin:
             self.gps_connection = None
 
     def _on_gps_position(self, point):
-        from qgis.core import QgsMessageLog
-        QgsMessageLog.logMessage(f"GPS fix received: lon={point.x()}, lat={point.y()}", "Macrophyte")
-        
         lat = point.y()
         lon = point.x()
         if lat is None or lon is None:
             return
-        
-        print(f"PLUGIN calling dock_widget.set_coordinates, dock_widget id={id(self.dock_widget)}")
-        self.dock_widget.set_coordinates(lon, lat, source="GPS")
 
         self.dock_widget.set_coordinates(lon, lat, source="GPS")
 
@@ -218,14 +211,6 @@ class MacrophyteDataPlugin:
             canvas_point = xform.transform(canvas_point)
         self._show_pending_marker(canvas_point)
     
-    def set_coordinates(self, lon, lat, source="GPS"):
-        self.longitude = float(lon)
-        self.latitude  = float(lat)
-        self.coord_source = source
-        self.lat_lbl.setText(f"Lat: {self.latitude:.6f}")
-        self.lon_lbl.setText(f"Lon: {self.longitude:.6f}")
-        print(f"DOCK updated labels to: {self.lat_lbl.text()} / {self.lon_lbl.text()}")
-
     # ------------------------------------------------------------------
     # Pending point marker
     # ------------------------------------------------------------------
