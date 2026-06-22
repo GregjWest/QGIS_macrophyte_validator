@@ -188,13 +188,12 @@ class MacrophyteDataPlugin:
             self.gps_connection.positionChanged.disconnect(
                 self._on_gps_position)
         except (RuntimeError, TypeError):
-            # RuntimeError: underlying C++ object already deleted
-            # TypeError: signal was never connected
             pass
         finally:
             self.gps_connection = None
 
     def _on_gps_position(self, point):
+        """Fired automatically whenever a new valid GPS fix comes in."""
         lat = point.y()
         lon = point.x()
         if lat is None or lon is None:
@@ -207,10 +206,10 @@ class MacrophyteDataPlugin:
         canvas_point = QgsPointXY(lon, lat)
         if canvas_crs != wgs84:
             xform = QgsCoordinateTransform(wgs84, canvas_crs,
-                                        QgsProject.instance())
+                                           QgsProject.instance())
             canvas_point = xform.transform(canvas_point)
         self._show_pending_marker(canvas_point)
-    
+
     # ------------------------------------------------------------------
     # Pending point marker
     # ------------------------------------------------------------------
@@ -236,13 +235,10 @@ class MacrophyteDataPlugin:
     # ------------------------------------------------------------------
 
     def _get_or_create_layer(self):
-        # 1. Already loaded in the project? Use it directly.
         layers = QgsProject.instance().mapLayersByName(LAYER_NAME)
         if layers:
             return layers[0]
 
-        # 2. Determine where the GeoPackage should live — next to the
-        #    project file.
         project_path = QgsProject.instance().fileName()
         if not project_path:
             QMessageBox.warning(
@@ -254,8 +250,6 @@ class MacrophyteDataPlugin:
         project_dir = os.path.dirname(project_path)
         gpkg_path = os.path.join(project_dir, GPKG_FILENAME)
 
-        # 3. If the GeoPackage already exists on disk (e.g. from a
-        #    previous field day), load the existing layer from it.
         if os.path.exists(gpkg_path):
             uri = f"{gpkg_path}|layername={LAYER_NAME}"
             layer = QgsVectorLayer(uri, LAYER_NAME, "ogr")
@@ -270,7 +264,6 @@ class MacrophyteDataPlugin:
                     "corrupted or locked by another program.")
                 return None
 
-        # 4. Nothing exists yet — create a new GeoPackage with the schema.
         return self._create_new_gpkg_layer(gpkg_path)
 
     def _create_new_gpkg_layer(self, gpkg_path):
@@ -302,7 +295,7 @@ class MacrophyteDataPlugin:
                 f"Could not create {GPKG_FILENAME}:\n{writer.errorMessage()}")
             return None
 
-        del writer  # flush/close the file before reopening as a layer
+        del writer
 
         uri = f"{gpkg_path}|layername={LAYER_NAME}"
         layer = QgsVectorLayer(uri, LAYER_NAME, "ogr")
@@ -318,7 +311,7 @@ class MacrophyteDataPlugin:
 
     def _apply_labelling(self, layer):
         """Label features as 'habitat comments', trimming cleanly when
-        comments is empty (e.g. 'Posidonia Dense patch' or just 'Posidonia')."""
+        comments is empty."""
         settings = QgsPalLayerSettings()
         settings.fieldName = (
             "CASE WHEN \"comments\" IS NULL OR \"comments\" = '' "
@@ -345,8 +338,6 @@ class MacrophyteDataPlugin:
         if not layer:
             return False
 
-        # Explicit, defensive casting — the GPKG/OGR writer is strict
-        # about field types and won't silently coerce strings.
         try:
             lon = float(data.get('longitude', 0.0))
             lat = float(data.get('latitude', 0.0))
@@ -357,7 +348,6 @@ class MacrophyteDataPlugin:
                 "valid numbers.")
             return False
 
-        # Determine next id safely, skipping any NULL/unset values
         existing_ids = []
         for f in layer.getFeatures():
             val = f['id']
@@ -367,8 +357,6 @@ class MacrophyteDataPlugin:
 
         feat = QgsFeature(layer.fields())
         feat.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(lon, lat)))
-
-        # Set attributes by name — immune to field-order mismatches
         feat.setAttribute('id', int(next_id))
         feat.setAttribute('habitat', str(data.get('habitat', '')))
         feat.setAttribute('comments', str(data.get('comments', '')))
@@ -388,6 +376,5 @@ class MacrophyteDataPlugin:
         layer.updateExtents()
         layer.triggerRepaint()
         self.iface.mapCanvas().refresh()
-
-        self._clear_pending_marker()   # point committed — remove temp marker
+        self._clear_pending_marker()
         return True
