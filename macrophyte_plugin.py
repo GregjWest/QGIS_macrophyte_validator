@@ -15,11 +15,11 @@ from qgis.PyQt.QtCore import Qt, QVariant
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 from qgis.core import (QgsProject, QgsVectorLayer, QgsFeature, QgsGeometry,
-                        QgsPointXY, QgsCoordinateReferenceSystem,
-                        QgsCoordinateTransform, QgsApplication,
-                        QgsVectorFileWriter, QgsWkbTypes, QgsFields,
-                        QgsField, QgsPalLayerSettings, QgsTextFormat,
-                        QgsVectorLayerSimpleLabeling)
+                       QgsPointXY, QgsCoordinateReferenceSystem,
+                       QgsCoordinateTransform, QgsApplication,
+                       QgsVectorFileWriter, QgsWkbTypes, QgsFields,
+                       QgsField, QgsPalLayerSettings, QgsTextFormat,
+                       QgsVectorLayerSimpleLabeling)
 from qgis.gui import QgsMapToolEmitPoint, QgsDockWidget, QgsVertexMarker
 
 from .macrophyte_dock import MacrophyteDockWidget
@@ -62,9 +62,9 @@ class MacrophyteDataPlugin:
         self.dock.setObjectName("MacrophyteDataDock")
         self.dock.setWidget(self.dock_widget)
         self.dock.setAllowedAreas(Qt.LeftDockWidgetArea |
-                                   Qt.RightDockWidgetArea)
+                                  Qt.RightDockWidgetArea)
         self.iface.mainWindow().addDockWidget(Qt.RightDockWidgetArea,
-                                               self.dock)
+                                              self.dock)
 
         # Wire signals
         self.dock_widget.record_requested.connect(self.save_record)
