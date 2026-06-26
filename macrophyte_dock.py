@@ -217,7 +217,7 @@ class MacrophyteDockWidget(QWidget):
         cmt_lay.setContentsMargins(4, 4, 4, 4)
 
         self.comments_edit = QTextEdit()
-        self.comments_edit.setMaximumHeight(50)
+        self.comments_edit.setFixedHeight(50)
         self.comments_edit.setPlaceholderText("Type or use buttons below…")
         cmt_lay.addWidget(self.comments_edit)
 

@@ -66,6 +66,9 @@ class MacrophyteDataPlugin:
         self.iface.mainWindow().addDockWidget(Qt.RightDockWidgetArea,
                                               self.dock)
 
+        # NEW — fires whenever the dock is shown or hidden by ANY means
+        self.dock.visibilityChanged.connect(self._on_dock_visibility_changed)
+
         # Wire signals
         self.dock_widget.record_requested.connect(self.save_record)
         self.dock_widget.activate_tool_requested.connect(
@@ -82,6 +85,22 @@ class MacrophyteDataPlugin:
         # Track external tool switches (e.g. user clicks Pan on QGIS toolbar)
         self.iface.mapCanvas().mapToolSet.connect(self._on_maptool_changed)
 
+    def _on_dock_visibility_changed(self, visible: bool):
+        """Called whenever the dock is shown or hidden by any means —
+        toolbar button, X close button, or programmatically."""
+        if visible:
+            # Panel just opened — arm GPS or map-click as appropriate
+            registry = QgsApplication.gpsConnectionRegistry()
+            if registry.connectionList() and not self.gps_connection:
+                self._toggle_gps_tracking(True)
+            else:
+                self._activate_point_tool()
+        else:
+            # Panel just closed — restore default cursor and disconnect GPS
+            self.iface.mapCanvas().unsetMapTool(self.point_tool)
+            self._disconnect_gps()
+            self.dock_widget.confirm_mode("map_click")
+
     def unload(self):
         for action in self.actions:
             self.iface.removePluginMenu(self.menu, action)
@@ -92,6 +111,7 @@ class MacrophyteDataPlugin:
         except TypeError:
             pass
         self._disconnect_gps()
+        self.iface.mapCanvas().unsetMapTool(self.point_tool)  # restore default on unload
         self._clear_pending_marker()
         if self.dock:
             self.iface.mainWindow().removeDockWidget(self.dock)
@@ -104,17 +124,9 @@ class MacrophyteDataPlugin:
 
     def toggle_panel(self):
         if self.dock.isVisible():
-            self.dock.hide()
-            if self.iface.mapCanvas().mapTool() == self.point_tool:
-                self.iface.mapCanvas().unsetMapTool(self.point_tool)
+            self.dock.hide()   # visibilityChanged fires -> _on_dock_visibility_changed(False)
         else:
-            self.dock.show()
-            # Default to Live GPS if a connection already exists; else map-click
-            registry = QgsApplication.gpsConnectionRegistry()
-            if registry.connectionList():
-                self._toggle_gps_tracking(True)
-            else:
-                self._activate_point_tool()
+            self.dock.show()   # visibilityChanged fires -> _on_dock_visibility_changed(True)
 
     # ------------------------------------------------------------------
     # Capture mode: Map-click
