@@ -1,5 +1,5 @@
 """
-Macrophyte Data Collection Plugin for QGIS
+Estuarine Habitat Validation Plugin for QGIS
 Dock panel version — stays visible while mapping.
 
 Capture mode is mutually exclusive: either Live GPS (primary) or
@@ -24,8 +24,8 @@ from qgis.gui import QgsMapToolEmitPoint, QgsDockWidget, QgsVertexMarker
 
 from .macrophyte_dock import MacrophyteDockWidget
 
-LAYER_NAME = "Macrophyte_Data"
-GPKG_FILENAME = "Macrophyte_Data.gpkg"
+LAYER_NAME = "Validation_Data"
+GPKG_FILENAME = "Validation_Data.gpkg"
 
 
 class MacrophyteDataPlugin:
@@ -34,7 +34,7 @@ class MacrophyteDataPlugin:
         self.iface = iface
         self.plugin_dir = os.path.dirname(__file__)
         self.actions = []
-        self.menu = u'&Macrophyte Data Collection'
+        self.menu = u'&Estuarine Habitat Validation'
         self.dock = None
         self.dock_widget = None
         self.point_tool = None
@@ -48,7 +48,7 @@ class MacrophyteDataPlugin:
     def initGui(self):
         icon_path = os.path.join(self.plugin_dir, 'icon.png')
         action = QAction(QIcon(icon_path),
-                         u'Macrophyte Data Collection',
+                         u'Estuarine Habitat Validation',
                          self.iface.mainWindow())
         action.triggered.connect(self.toggle_panel)
         self.iface.addToolBarIcon(action)
@@ -57,7 +57,7 @@ class MacrophyteDataPlugin:
 
         # Build dock
         self.dock_widget = MacrophyteDockWidget()
-        self.dock = QgsDockWidget("Macrophyte Data Collection",
+        self.dock = QgsDockWidget("Estuarine Habitat Validation",
                                   self.iface.mainWindow())
         self.dock.setObjectName("MacrophyteDataDock")
         self.dock.setWidget(self.dock_widget)

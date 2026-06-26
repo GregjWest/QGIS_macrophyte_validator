@@ -1,15 +1,12 @@
 [general]
-name=Macrophyte Field Data Collection
+name=Estuarine Habitat Validation
 qgisMinimumVersion=3.0
 description=Field data collection panel for seagrass, mangrove, and saltmarsh validation
 version=1.4
-author=Field Survey Team
+author=Greg West
 email=your.email@example.com
 
-about=Dockable panel replicating the ArcMap macrophyte data collection interface for QGIS.
-    Provides button-based field validation for seagrass, mangrove, and saltmarsh habitats
-    with live GPS coordinate capture, map-click capture for inaccessible locations, and
-    persistent GeoPackage storage alongside the project file.
+about=Dockable panel for QGIS. Provides button-based field validation for seagrass, mangrove, and saltmarsh habitats with live GPS coordinate capture, map-click capture for inaccessible locations, and persistent GeoPackage storage alongside the project file.
 
 tracker=https://github.com/your-repo/issues
 repository=https://github.com/your-repo
