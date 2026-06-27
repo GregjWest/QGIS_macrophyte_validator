@@ -9,7 +9,7 @@ from qgis.PyQt.QtCore import pyqtSignal, QDateTime, QTimer
 from qgis.PyQt.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                                  QGridLayout, QPushButton, QLabel,
                                  QTextEdit, QGroupBox, QMessageBox,
-                                 QScrollArea, QFrame)
+                                 QScrollArea, QFrame, QSizePolicy)
 
 ACTIVE_STYLE = "QPushButton { background-color: #2e7d32; color: white; font-weight: bold; border: 1px solid #1b5e20; border-radius: 3px; }"
 DEFAULT_STYLE = "QPushButton { background-color: #f0f0f0; border: 1px solid #aaa; border-radius: 3px; } QPushButton:hover { background-color: #dde; }"
@@ -54,7 +54,7 @@ HABITAT_VALUE_MAP = {
     "Rhizophora":     "Rhizophora stylosa",
     "Exoecaria":      "Exoecaria agallocha",
     "Fringing":       "Fringing mangroves",
-    "Man/SM":         "Mangrove/Saltmarsh mosaic",
+    "Man/SM":         "Mixed Mangrove/Saltmarsh",
     "Bruguiera":      "Bruguiera gymnorrhiza",
     "Widespread":     "Widespread mangroves",
     "Saltmarsh":      "Saltmarsh",
@@ -243,6 +243,8 @@ class MacrophyteDockWidget(QWidget):
             cmt_lay.addLayout(row_lay)
 
         cmt_box.setLayout(cmt_lay)
+        cmt_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+
         layout.addWidget(cmt_box)
 
         # ── Bottom buttons ───────────────────────────────────────────
