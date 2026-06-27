@@ -63,9 +63,9 @@ Restart QGIS and enable the plugin under **Plugins → Manage and Install Plugin
 
 ### Setup
 
-1. Save your QGIS project file — the plugin stores data in a GeoPackage (`Macrophyte_Data.gpkg`) created alongside the `.qgz` project file
+1. Save your QGIS project file — the plugin stores data in a GeoPackage (`Validation_Data.gpkg`) created alongside the `.qgz` project file
 2. For live GPS: connect your GPS device via **View → Panels → GPS Information** first
-3. Click the **Macrophyte Data Collection** toolbar button to open the panel
+3. Click the **Estuarine Habitat Validation** toolbar button to open the panel
 
 ### Capture modes
 
@@ -97,7 +97,7 @@ Switching between modes is mutually exclusive — enabling one automatically dis
 
 ## Data
 
-Points are saved to `Macrophyte_Data.gpkg` in the same folder as the QGIS project file.
+Points are saved to `Validation_Data.gpkg` in the same folder as the QGIS project file.
 
 | Field     | Type    | Content                                            |
 | --------- | ------- | -------------------------------------------------- |
