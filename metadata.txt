@@ -8,12 +8,12 @@ email=your.email@example.com
 
 about=Dockable panel for QGIS. Provides button-based field validation for seagrass, mangrove, and saltmarsh habitats with live GPS coordinate capture, map-click capture for inaccessible locations, and persistent GeoPackage storage alongside the project file.
 
-tracker=https://github.com/your-repo/issues
-repository=https://github.com/your-repo
+tracker=https://github.com/GregjWest/QGIS_macrophyte_validator/issues
+repository=https://github.com/GregjWest/QGIS_macrophyte_validator
 
 tags=field data,gps,seagrass,mangrove,saltmarsh,marine,coastal
 
-homepage=https://github.com/your-repo
+homepage=https://github.com/GregjWest/QGIS_macrophyte_validator
 category=Vector
 icon=icon.png
 
