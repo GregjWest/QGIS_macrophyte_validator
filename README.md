@@ -1,6 +1,6 @@
-# QGIS Macrophyte Validator
+# QGIS Estuarine Habitat Validator
 
-A QGIS dock panel plugin for field validation of estuarine macrophyte habitats — seagrass, mangrove, and saltmarsh. Replicates the button-based data collection interface previously used in ArcMap, with live GPS support and persistent GeoPackage storage.
+A QGIS dock panel plugin for field validation of estuarine macrophyte habitats — seagrass, mangrove, and saltmarsh with live GPS support and persistent GeoPackage storage.
 
 Developed for coastal habitat mapping in NSW estuaries.
 
