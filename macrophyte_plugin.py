@@ -5,6 +5,9 @@ Dock panel version — stays visible while mapping.
 Capture mode is mutually exclusive: either Live GPS (primary) or
 Map-click (fallback for locations you can't physically reach).
 
+Location is explicitly marked by the user at the moment of sighting,
+preventing spatial drift during data entry.
+
 Data is stored in a GeoPackage saved alongside the project file, so
 records persist across sessions (e.g. multiple field days on the
 same estuary project).
@@ -66,7 +69,7 @@ class MacrophyteDataPlugin:
         self.iface.mainWindow().addDockWidget(Qt.RightDockWidgetArea,
                                               self.dock)
 
-        # NEW — fires whenever the dock is shown or hidden by ANY means
+        # Fires whenever the dock is shown or hidden by ANY means
         self.dock.visibilityChanged.connect(self._on_dock_visibility_changed)
 
         # Wire signals
@@ -77,26 +80,25 @@ class MacrophyteDataPlugin:
             self._clear_pending_marker)
         self.dock_widget.gps_toggle_requested.connect(
             self._toggle_gps_tracking)
+        self.dock_widget.mark_location_requested.connect(
+            self._mark_gps_location)
 
         # Map tool (manual click fallback)
         self.point_tool = QgsMapToolEmitPoint(self.iface.mapCanvas())
         self.point_tool.canvasClicked.connect(self._canvas_clicked)
 
-        # Track external tool switches (e.g. user clicks Pan on QGIS toolbar)
+        # Track external tool switches
         self.iface.mapCanvas().mapToolSet.connect(self._on_maptool_changed)
 
     def _on_dock_visibility_changed(self, visible: bool):
-        """Called whenever the dock is shown or hidden by any means —
-        toolbar button, X close button, or programmatically."""
+        """Called whenever the dock is shown or hidden by any means."""
         if visible:
-            # Panel just opened — arm GPS or map-click as appropriate
             registry = QgsApplication.gpsConnectionRegistry()
             if registry.connectionList() and not self.gps_connection:
                 self._toggle_gps_tracking(True)
             else:
                 self._activate_point_tool()
         else:
-            # Panel just closed — restore default cursor and disconnect GPS
             self.iface.mapCanvas().unsetMapTool(self.point_tool)
             self._disconnect_gps()
             self.dock_widget.confirm_mode("map_click")
@@ -111,7 +113,7 @@ class MacrophyteDataPlugin:
         except TypeError:
             pass
         self._disconnect_gps()
-        self.iface.mapCanvas().unsetMapTool(self.point_tool)  # restore default on unload
+        self.iface.mapCanvas().unsetMapTool(self.point_tool)
         self._clear_pending_marker()
         if self.dock:
             self.iface.mainWindow().removeDockWidget(self.dock)
@@ -124,33 +126,30 @@ class MacrophyteDataPlugin:
 
     def toggle_panel(self):
         if self.dock.isVisible():
-            self.dock.hide()   # visibilityChanged fires -> _on_dock_visibility_changed(False)
+            self.dock.hide()
         else:
-            self.dock.show()   # visibilityChanged fires -> _on_dock_visibility_changed(True)
+            self.dock.show()
 
     # ------------------------------------------------------------------
     # Capture mode: Map-click
     # ------------------------------------------------------------------
 
     def _activate_point_tool(self):
-        """User wants map-click mode — disable GPS first, then arm the tool."""
+        """Arm the map-click tool — disable GPS first."""
         self._disconnect_gps()
         self.iface.mapCanvas().setMapTool(self.point_tool)
         self.dock_widget.confirm_mode("map_click")
 
     def _on_maptool_changed(self, new_tool, old_tool):
-        """If the user switches to Pan/Zoom/etc. via QGIS's own toolbar
-        while in map-click mode, show the resume button as paused —
-        but only if we're not in GPS mode."""
+        """Keep the resume button status accurate when user switches tools."""
         if self.dock_widget and self.gps_connection is None:
             is_armed = (new_tool == self.point_tool)
             self.dock_widget.set_map_click_armed(is_armed)
 
     def _canvas_clicked(self, point, button):
-        # Show marker immediately at the clicked location (canvas CRS)
+        """Map click in manual mode — snapshot location at clicked point."""
         self._show_pending_marker(point)
 
-        # Convert to WGS84 for storage
         canvas_crs = self.iface.mapCanvas().mapSettings().destinationCrs()
         wgs84 = QgsCoordinateReferenceSystem('EPSG:4326')
         if canvas_crs != wgs84:
@@ -160,8 +159,8 @@ class MacrophyteDataPlugin:
         else:
             wgs84_point = point
 
-        self.dock_widget.set_coordinates(wgs84_point.x(), wgs84_point.y(),
-                                         source="Manual")
+        self.dock_widget.set_marked_location(wgs84_point.x(), wgs84_point.y(),
+                                             source="Manual")
 
     # ------------------------------------------------------------------
     # Capture mode: Live GPS
@@ -183,17 +182,16 @@ class MacrophyteDataPlugin:
             self.dock_widget.confirm_mode("map_click")
             return
 
-        # Switch off map-click tool while GPS drives the position
         if self.iface.mapCanvas().mapTool() == self.point_tool:
             self.iface.mapCanvas().unsetMapTool(self.point_tool)
 
-        self._disconnect_gps()  # clean up any stale connection first
+        self._disconnect_gps()
         self.gps_connection = connections[0]
         self.gps_connection.positionChanged.connect(self._on_gps_position)
         self.dock_widget.confirm_mode("gps")
 
     def _disconnect_gps(self):
-        """Safely disconnect from the current GPS connection, if still alive."""
+        """Safely disconnect from the current GPS connection."""
         if self.gps_connection is None:
             return
         try:
@@ -205,13 +203,24 @@ class MacrophyteDataPlugin:
             self.gps_connection = None
 
     def _on_gps_position(self, point):
-        """Fired automatically whenever a new valid GPS fix comes in."""
+        """Fired on every GPS fix — updates live display only.
+        No marker placed until user presses Mark Location."""
         lat = point.y()
         lon = point.x()
         if lat is None or lon is None:
             return
-
         self.dock_widget.set_coordinates(lon, lat, source="GPS")
+
+    def _mark_gps_location(self):
+        """User pressed Mark Location in GPS mode — snapshot current position
+        and place marker on the map canvas."""
+        lon = self.dock_widget.longitude
+        lat = self.dock_widget.latitude
+        if lon is None or lat is None:
+            QMessageBox.warning(
+                self.iface.mainWindow(), "No GPS fix",
+                "No GPS position available yet. Wait for a fix then try again.")
+            return
 
         canvas_crs = self.iface.mapCanvas().mapSettings().destinationCrs()
         wgs84 = QgsCoordinateReferenceSystem('EPSG:4326')
@@ -220,14 +229,16 @@ class MacrophyteDataPlugin:
             xform = QgsCoordinateTransform(wgs84, canvas_crs,
                                            QgsProject.instance())
             canvas_point = xform.transform(canvas_point)
+
         self._show_pending_marker(canvas_point)
+        self.dock_widget.set_marked_location(lon, lat, source="GPS")
 
     # ------------------------------------------------------------------
     # Pending point marker
     # ------------------------------------------------------------------
 
     def _show_pending_marker(self, canvas_point):
-        """Show/move a marker at the given location (must be in canvas CRS)."""
+        """Show/move marker at the given location (must be in canvas CRS)."""
         if self.marker is None:
             self.marker = QgsVertexMarker(self.iface.mapCanvas())
             self.marker.setIconType(QgsVertexMarker.ICON_CROSS)
@@ -243,7 +254,7 @@ class MacrophyteDataPlugin:
             self.marker = None
 
     # ------------------------------------------------------------------
-    # Layer management — persistent GeoPackage alongside the project file
+    # Layer management
     # ------------------------------------------------------------------
 
     def _get_or_create_layer(self):
@@ -255,7 +266,7 @@ class MacrophyteDataPlugin:
         if not project_path:
             QMessageBox.warning(
                 self.iface.mainWindow(), "Project not saved",
-                "Please save your QGIS project first, so the macrophyte "
+                "Please save your QGIS project first, so the validation "
                 "GeoPackage can be stored alongside it.")
             return None
 
@@ -322,8 +333,7 @@ class MacrophyteDataPlugin:
         return layer
 
     def _apply_labelling(self, layer):
-        """Label features as 'habitat comments', trimming cleanly when
-        comments is empty."""
+        """Label features as 'habitat comments', trimming when comments empty."""
         settings = QgsPalLayerSettings()
         settings.fieldName = (
             "CASE WHEN \"comments\" IS NULL OR \"comments\" = '' "

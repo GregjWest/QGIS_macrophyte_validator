@@ -3,9 +3,11 @@ Dock panel for macrophyte field data collection.
 Compact layout for scaled laptop screens.
 Single Habitat selection (Seagrass OR Mangrove/Saltmarsh) + free-text Comments.
 Capture mode toggle: Live GPS and Map-click are side-by-side and mutually exclusive.
+Location is explicitly marked by the user at the moment of sighting via the
+Mark Location button, preventing spatial drift during data entry.
 """
 
-from qgis.PyQt.QtCore import pyqtSignal, QDateTime, QTimer
+from qgis.PyQt.QtCore import pyqtSignal, QDateTime, QTimer, Qt
 from qgis.PyQt.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                                  QGridLayout, QPushButton, QLabel,
                                  QTextEdit, QGroupBox, QMessageBox,
@@ -23,6 +25,14 @@ TOOL_ACTIVE_STYLE = (
 TOOL_INACTIVE_STYLE = (
     "QPushButton { background-color: #f5a623; color: #3a2a00; font-weight: bold; "
     "border: 2px solid #c8800a; border-radius: 4px; padding: 4px; }"
+)
+MARK_STYLE = (
+    "QPushButton { background-color: #6a1b9a; color: white; font-weight: bold; "
+    "border: 2px solid #4a148c; border-radius: 4px; padding: 4px; }"
+)
+MARK_LOCKED_STYLE = (
+    "QPushButton { background-color: #2e7d32; color: white; font-weight: bold; "
+    "border: 2px solid #1b5e20; border-radius: 4px; padding: 4px; }"
 )
 
 HABITAT_VALUE_MAP = {
@@ -47,15 +57,9 @@ HABITAT_VALUE_MAP = {
     # Mangrove / Saltmarsh
     "Single Tree":    "Single mangrove tree",
     "Small group":    "Small group of mangroves",
-    "Avicennia":      "Avicennia marina",
-    "Aegiceras":      "Aegiceras corniculatum",
     "Scattered":      "Scattered mangroves",
     "No mangroves":   "No mangroves present",
-    "Rhizophora":     "Rhizophora stylosa",
-    "Exoecaria":      "Exoecaria agallocha",
     "Fringing":       "Fringing mangroves",
-    "Man/SM":         "Mixed Mangrove/Saltmarsh",
-    "Bruguiera":      "Bruguiera gymnorrhiza",
     "Widespread":     "Widespread mangroves",
     "Saltmarsh":      "Saltmarsh",
     "No Saltmarsh":   "No saltmarsh present",
@@ -64,21 +68,25 @@ HABITAT_VALUE_MAP = {
 
 class MacrophyteDockWidget(QWidget):
 
-    record_requested = pyqtSignal(dict)
+    record_requested        = pyqtSignal(dict)
     activate_tool_requested = pyqtSignal()
-    cancel_point_requested = pyqtSignal()
-    gps_toggle_requested = pyqtSignal(bool)
+    cancel_point_requested  = pyqtSignal()
+    gps_toggle_requested    = pyqtSignal(bool)
+    mark_location_requested = pyqtSignal()
 
     def __init__(self):
         super().__init__()
-        self.current_habitat = ""
+        self.current_habitat       = ""
         self.current_habitat_label = ""
-        self.longitude = None
-        self.latitude = None
+        self.longitude    = None
+        self.latitude     = None
+        self.marked_lon   = None
+        self.marked_lat   = None
         self.coord_source = "GPS"
+        self.location_locked = False
         self.capture_mode = "map_click"
-        self._sg_buttons = {}
-        self._mn_buttons = {}
+        self._sg_buttons  = {}
+        self._mn_buttons  = {}
         self._init_ui()
 
     # ------------------------------------------------------------------
@@ -91,12 +99,14 @@ class MacrophyteDockWidget(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         container = QWidget()
+        container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         layout = QVBoxLayout(container)
         layout.setSpacing(4)
+        layout.setAlignment(Qt.AlignTop)
         scroll.setWidget(container)
         outer.addWidget(scroll)
 
-        # ── Capture mode — side by side in one compact group ────────
+        # ── Capture mode — side by side ─────────────────────────────
         mode_box = QGroupBox("Capture Mode")
         mode_lay = QVBoxLayout()
         mode_lay.setSpacing(3)
@@ -118,6 +128,7 @@ class MacrophyteDockWidget(QWidget):
 
         mode_lay.addLayout(mode_btn_row)
 
+        # Live GPS position display (updates continuously)
         coord_row = QHBoxLayout()
         coord_row.setSpacing(8)
         self.lat_lbl = QLabel("Lat: —")
@@ -129,7 +140,20 @@ class MacrophyteDockWidget(QWidget):
         coord_row.addStretch()
         mode_lay.addLayout(coord_row)
 
+        # Mark Location button
+        self.mark_btn = QPushButton("📍 Mark Location")
+        self.mark_btn.setMinimumHeight(30)
+        self.mark_btn.setStyleSheet(MARK_STYLE)
+        self.mark_btn.clicked.connect(self._on_mark_clicked)
+        mode_lay.addWidget(self.mark_btn)
+
+        # Marked position display
+        self.marked_lbl = QLabel("No location marked")
+        self.marked_lbl.setStyleSheet("font-size: 9pt; color: #888;")
+        mode_lay.addWidget(self.marked_lbl)
+
         mode_box.setLayout(mode_lay)
+        mode_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         layout.addWidget(mode_box)
 
         self._refresh_mode_buttons()
@@ -181,6 +205,7 @@ class MacrophyteDockWidget(QWidget):
         sg_grid.addWidget(mapped_btn, 4, 0, 1, 2)
         sg_grid.addWidget(sg_clear,   4, 2, 1, 2)
         sg_box.setLayout(sg_grid)
+        sg_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         layout.addWidget(sg_box)
 
         # ── Mangrove / Saltmarsh ─────────────────────────────────────
@@ -189,10 +214,8 @@ class MacrophyteDockWidget(QWidget):
         mn_grid.setSpacing(2)
         mn_grid.setContentsMargins(4, 4, 4, 4)
         mangrove_rows = [
-            ["Single Tree",   "Small group",  "Avicennia",   "Aegiceras"],
-            ["Scattered",     "No mangroves", "Rhizophora",  "Exoecaria"],
-            ["Fringing",      "Man/SM",       "Bruguiera",   ""],
-            ["Widespread",    "Saltmarsh",    "No Saltmarsh", ""],
+            ["Single Tree",     "Small group",      "Scattered",    "Fringing"],
+            ["Widespread",      "No mangroves",     "Saltmarsh",    "No Saltmarsh"], 
         ]
         for r, row in enumerate(mangrove_rows):
             for c, text in enumerate(row):
@@ -208,6 +231,7 @@ class MacrophyteDockWidget(QWidget):
                 self._mn_buttons[text] = btn
 
         mn_box.setLayout(mn_grid)
+        mn_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         layout.addWidget(mn_box)
 
         # ── Comments ─────────────────────────────────────────────────
@@ -244,7 +268,6 @@ class MacrophyteDockWidget(QWidget):
 
         cmt_box.setLayout(cmt_lay)
         cmt_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-
         layout.addWidget(cmt_box)
 
         # ── Bottom buttons ───────────────────────────────────────────
@@ -273,8 +296,6 @@ class MacrophyteDockWidget(QWidget):
         bottom_row.addStretch()
         bottom_row.addWidget(add_btn)
         layout.addLayout(bottom_row)
-
-        layout.addStretch()
 
     # ------------------------------------------------------------------
     # Capture mode
@@ -316,6 +337,36 @@ class MacrophyteDockWidget(QWidget):
             self.gps_btn.setStyleSheet(TOOL_INACTIVE_STYLE)
 
     # ------------------------------------------------------------------
+    # Mark Location
+    # ------------------------------------------------------------------
+
+    def _on_mark_clicked(self):
+        """Behaviour depends on capture mode."""
+        if self.capture_mode == "gps":
+            self.mark_location_requested.emit()
+        else:
+            self.activate_tool_requested.emit()
+
+    def set_marked_location(self, lon, lat, source="GPS"):
+        """Lock the snapshotted coordinates and update the display."""
+        self.marked_lon = float(lon)
+        self.marked_lat = float(lat)
+        self.coord_source = source
+        self.location_locked = True
+        self.mark_btn.setText("📍 Location Marked ✔")
+        self.mark_btn.setStyleSheet(MARK_LOCKED_STYLE)
+        self.marked_lbl.setText(
+            f"📌 {self.marked_lat:.8f}, {self.marked_lon:.8f} ({source})")
+        self.marked_lbl.setStyleSheet(
+            "font-size: 9pt; color: #2e7d32; font-weight: bold;")
+
+    def _reset_mark_btn(self):
+        self.mark_btn.setText("📍 Mark Location")
+        self.mark_btn.setStyleSheet(MARK_STYLE)
+        self.marked_lbl.setText("No location marked")
+        self.marked_lbl.setStyleSheet("font-size: 9pt; color: #888;")
+
+    # ------------------------------------------------------------------
     # Habitat selection
     # ------------------------------------------------------------------
 
@@ -327,17 +378,17 @@ class MacrophyteDockWidget(QWidget):
         mapped_value = HABITAT_VALUE_MAP.get(text, text)
 
         if self.current_habitat == mapped_value:
-            self.current_habitat = ""
+            self.current_habitat       = ""
             self.current_habitat_label = ""
         else:
-            self.current_habitat = mapped_value
+            self.current_habitat       = mapped_value
             self.current_habitat_label = text
             source_dict[text].setStyleSheet(ACTIVE_STYLE)
 
         self._update_status()
 
     def _clear_habitat(self):
-        self.current_habitat = ""
+        self.current_habitat       = ""
         self.current_habitat_label = ""
         for d in (self._sg_buttons, self._mn_buttons):
             for b in d.values():
@@ -357,7 +408,8 @@ class MacrophyteDockWidget(QWidget):
     # ------------------------------------------------------------------
 
     def clear_all(self):
-        self.current_habitat = ""
+        """Clear attribute selections only — keeps marked location intact."""
+        self.current_habitat       = ""
         self.current_habitat_label = ""
         for d in (self._sg_buttons, self._mn_buttons):
             for b in d.values():
@@ -366,11 +418,17 @@ class MacrophyteDockWidget(QWidget):
         self._update_status()
 
     def _cancel_point(self):
+        """Abandon this point — clears attributes, marked location and marker.
+        GPS tracking continues."""
         self.clear_all()
-        self.longitude = None
-        self.latitude = None
+        self.marked_lon      = None
+        self.marked_lat      = None
+        self.location_locked = False
+        self.longitude       = None
+        self.latitude        = None
         self.lat_lbl.setText("Lat: —")
         self.lon_lbl.setText("Lon: —")
+        self._reset_mark_btn()
         self.cancel_point_requested.emit()
 
     def _update_status(self):
@@ -378,15 +436,16 @@ class MacrophyteDockWidget(QWidget):
             f"Habitat: {self.current_habitat}" if self.current_habitat else "No selection")
 
     # ------------------------------------------------------------------
-    # Coordinates
+    # Coordinates — live GPS feed (display only)
     # ------------------------------------------------------------------
 
     def set_coordinates(self, lon, lat, source="GPS"):
-        self.longitude = float(lon)
-        self.latitude = float(lat)
+        """Update live position display only. Does not affect marked location."""
+        self.longitude    = float(lon)
+        self.latitude     = float(lat)
         self.coord_source = source
-        self.lat_lbl.setText(f"Lat: {self.latitude:.6f}")
-        self.lon_lbl.setText(f"Lon: {self.longitude:.6f}")
+        self.lat_lbl.setText(f"Lat: {self.latitude:.8f}")
+        self.lon_lbl.setText(f"Lon: {self.longitude:.8f}")
 
     # ------------------------------------------------------------------
     # Save record
@@ -396,17 +455,17 @@ class MacrophyteDockWidget(QWidget):
         if not self.current_habitat:
             QMessageBox.warning(self, "Missing data", "Select a habitat type.")
             return
-        if self.longitude is None:
-            QMessageBox.warning(self, "No location",
-                                "No location set — enable Live GPS or click "
-                                "the map to set a location first.")
+        if not self.location_locked or self.marked_lon is None:
+            QMessageBox.warning(self, "No location marked",
+                                "Press 'Mark Location' at the sighting spot "
+                                "before adding a record.")
             return
 
         data = {
             'habitat':   self.current_habitat,
             'comments':  self.comments_edit.toPlainText(),
-            'longitude': self.longitude,
-            'latitude':  self.latitude,
+            'longitude': self.marked_lon,
+            'latitude':  self.marked_lat,
             'timestamp': QDateTime.currentDateTime().toString("yyyy-MM-dd HH:mm:ss"),
             'source':    self.coord_source,
         }
@@ -417,6 +476,10 @@ class MacrophyteDockWidget(QWidget):
             "QLabel { background: #bbdefb; border: 1px solid #90caf9; "
             "border-radius: 3px; padding: 3px; font-size: 9pt; }")
         self.clear_all()
+        self.marked_lon      = None
+        self.marked_lat      = None
+        self.location_locked = False
+        self._reset_mark_btn()
         QTimer.singleShot(2000, self._reset_status_style)
 
     def _reset_status_style(self):
