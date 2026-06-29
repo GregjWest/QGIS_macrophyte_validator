@@ -4,7 +4,7 @@ qgisMinimumVersion=3.0
 description=Field data collection panel for seagrass, mangrove, and saltmarsh validation
 version=1.4
 author=Greg West
-email=your.email@example.com
+email=gregory.west@dpird.nsw.gov.au
 
 about=Dockable panel for QGIS. Provides button-based field validation for seagrass, mangrove, and saltmarsh habitats with live GPS coordinate capture, map-click capture for inaccessible locations, and persistent GeoPackage storage alongside the project file.
 

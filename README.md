@@ -65,7 +65,7 @@ Restart QGIS and enable the plugin under **Plugins → Manage and Install Plugin
 
 1. Save your QGIS project file — the plugin stores data in a GeoPackage (`Validation_Data.gpkg`) created alongside the `.qgz` project file
 2. For live GPS: connect your GPS device via **View → Panels → GPS Information** first
-3. Click the **Estuarine Habitat Validation** toolbar button to open the panel
+3. Click the **Estuarine Habitat Validation** icon in the toolbar button to open the panel
 
 ### Capture modes
 
