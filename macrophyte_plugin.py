@@ -8,13 +8,17 @@ Map-click (fallback for locations you can't physically reach).
 Location is explicitly marked by the user at the moment of sighting,
 preventing spatial drift during data entry.
 
+A watchdog timer periodically checks whether the GPS registry's active
+connection has changed (e.g. user disabled/re-enabled GPS in QGIS) and
+reconnects automatically.
+
 Data is stored in a GeoPackage saved alongside the project file, so
 records persist across sessions (e.g. multiple field days on the
 same estuary project).
 """
 
 import os
-from qgis.PyQt.QtCore import Qt, QVariant
+from qgis.PyQt.QtCore import Qt, QVariant, QTimer
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 from qgis.core import (QgsProject, QgsVectorLayer, QgsFeature, QgsGeometry,
@@ -43,6 +47,10 @@ class MacrophyteDataPlugin:
         self.point_tool = None
         self.marker = None
         self.gps_connection = None
+
+        self.gps_watchdog = QTimer()
+        self.gps_watchdog.setInterval(3000)  # check every 3 seconds
+        self.gps_watchdog.timeout.connect(self._check_gps_connection)
 
     # ------------------------------------------------------------------
     # Setup / teardown
@@ -90,6 +98,9 @@ class MacrophyteDataPlugin:
         # Track external tool switches
         self.iface.mapCanvas().mapToolSet.connect(self._on_maptool_changed)
 
+        # Start watchdog — checks for GPS reconnections while in GPS mode
+        self.gps_watchdog.start()
+
     def _on_dock_visibility_changed(self, visible: bool):
         """Called whenever the dock is shown or hidden by any means."""
         if visible:
@@ -104,6 +115,7 @@ class MacrophyteDataPlugin:
             self.dock_widget.confirm_mode("map_click")
 
     def unload(self):
+        self.gps_watchdog.stop()
         for action in self.actions:
             self.iface.removePluginMenu(self.menu, action)
             self.iface.removeToolBarIcon(action)
@@ -201,6 +213,27 @@ class MacrophyteDataPlugin:
             pass
         finally:
             self.gps_connection = None
+
+    def _check_gps_connection(self):
+        """Periodically verify our GPS connection is still the live one in
+        the registry. If the user disabled/re-enabled GPS in QGIS, the
+        registry's connection object changes — reconnect automatically."""
+        if self.dock_widget is None or self.dock_widget.capture_mode != "gps":
+            return
+
+        registry = QgsApplication.gpsConnectionRegistry()
+        connections = registry.connectionList()
+
+        if not connections:
+            # GPS was disabled and not yet re-enabled — nothing to do
+            return
+
+        current = connections[0]
+        if current != self.gps_connection:
+            # Registry has a different (new) connection — reconnect
+            self._disconnect_gps()
+            self.gps_connection = current
+            self.gps_connection.positionChanged.connect(self._on_gps_position)
 
     def _on_gps_position(self, point):
         """Fired on every GPS fix — updates live display only.
